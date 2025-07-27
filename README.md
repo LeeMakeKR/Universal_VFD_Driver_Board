@@ -21,5 +21,14 @@ Arduino compatible interface
 - 범용적인 VFD 구동 솔루션
 Universal VFD driving solution
 
+<details>
+<summary>1번 VFD (7BT317NK)</summary>
+
+![Grid/Segment](pics/VFD/7bt317b.jpg)
+![VFD](pics/VFD/7bt317a.jpg)
+![연결 테이블](pics/connection_table_7BT317NK.jpg)
+
+</details>
+
 ## 라이선스 License
 MIT License
