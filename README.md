@@ -5,7 +5,7 @@
 
 A universal PCB circuit project for driving VFD (Vacuum Fluorescent Display) using Arduino.
 
-## 목표 (Goals)
+## 목표 Goals
 - max6921 드라이버 칩을 사용한 VFD 구동 회로 설계 
 VFD driving circuit design using max6921 driver chip
 - 아두이노와 호환되는 범용 PCB 보드 제작 
