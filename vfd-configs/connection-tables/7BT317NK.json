@@ -1,7 +1,0 @@
-{
-  "vfd_model": "7BT317NK",
-  "driver_chip": "MAX6921",
-  "total_digits": 4,
-  "segment_type": "7-segment",
-  "notes": "4-digit 7-segment VFD with common grid"
-}
