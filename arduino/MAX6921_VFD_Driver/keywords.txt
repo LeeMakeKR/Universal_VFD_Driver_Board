@@ -1,0 +1,55 @@
+#######################################
+# Syntax Coloring Map for MAX6921_VFD_Driver
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+MAX6921_VFD_Driver	KEYWORD1
+FontPattern	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+begin	KEYWORD2
+clear	KEYWORD2
+refresh	KEYWORD2
+setBrightness	KEYWORD2
+getBrightness	KEYWORD2
+displayCharacter	KEYWORD2
+displayString	KEYWORD2
+displayNumber	KEYWORD2
+displayFloat	KEYWORD2
+setDecimalPoint	KEYWORD2
+setColon	KEYWORD2
+displayTime	KEYWORD2
+setSegment	KEYWORD2
+setGrid	KEYWORD2
+displayTest	KEYWORD2
+segmentTest	KEYWORD2
+gridTest	KEYWORD2
+setGridScanDelay	KEYWORD2
+getGridScanDelay	KEYWORD2
+scrollText	KEYWORD2
+fadeIn	KEYWORD2
+fadeOut	KEYWORD2
+isValidPosition	KEYWORD2
+getVersion	KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+
+VFD_NUM_GRIDS	LITERAL1
+VFD_NUM_SEGMENTS	LITERAL1
+VFD_NUM_DIGITS	LITERAL1
+VFD_MAX_BRIGHTNESS	LITERAL1
+DEFAULT_MAX6921_1_LOAD_PIN	LITERAL1
+DEFAULT_MAX6921_1_BLANK_PIN	LITERAL1
+DEFAULT_MAX6921_2_LOAD_PIN	LITERAL1
+DEFAULT_MAX6921_2_BLANK_PIN	LITERAL1
+DEFAULT_GRID_SCAN_DELAY_US	LITERAL1
+DEFAULT_SPI_CLOCK_SPEED	LITERAL1
+MAX6921_VFD_DRIVER_VERSION	LITERAL1
