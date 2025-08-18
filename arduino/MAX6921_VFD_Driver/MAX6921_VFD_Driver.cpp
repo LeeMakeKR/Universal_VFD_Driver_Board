@@ -11,12 +11,9 @@
 #include "MAX6921_VFD_Driver.h"
 
 // Constructor
-MAX6921_VFD_Driver::MAX6921_VFD_Driver(uint8_t load1Pin, uint8_t blank1Pin, 
-                                       uint8_t load2Pin, uint8_t blank2Pin) {
-    _load1Pin = load1Pin;
-    _blank1Pin = blank1Pin;
-    _load2Pin = load2Pin;
-    _blank2Pin = blank2Pin;
+MAX6921_VFD_Driver::MAX6921_VFD_Driver(uint8_t loadPin, uint8_t blankPin) {
+    _loadPin = loadPin;
+    _blankPin = blankPin;
     
     _currentGrid = 0;
     _brightness = VFD_MAX_BRIGHTNESS;
@@ -54,16 +51,12 @@ bool MAX6921_VFD_Driver::begin(uint32_t spiClockSpeed) {
 // Initialize hardware pins
 void MAX6921_VFD_Driver::initializePins() {
     // Configure pins as outputs
-    pinMode(_load1Pin, OUTPUT);
-    pinMode(_blank1Pin, OUTPUT);
-    pinMode(_load2Pin, OUTPUT);
-    pinMode(_blank2Pin, OUTPUT);
+    pinMode(_loadPin, OUTPUT);
+    pinMode(_blankPin, OUTPUT);
     
     // Set initial states
-    digitalWrite(_load1Pin, HIGH);    // LOAD inactive (active low)
-    digitalWrite(_blank1Pin, HIGH);   // Display enabled (active low)
-    digitalWrite(_load2Pin, HIGH);    // LOAD inactive (active low)
-    digitalWrite(_blank2Pin, HIGH);   // Display enabled (active low)
+    digitalWrite(_loadPin, HIGH);     // LOAD inactive (active low)
+    digitalWrite(_blankPin, HIGH);    // Display enabled (active low)
 }
 
 // Send data to MAX6921 chips
@@ -71,9 +64,8 @@ void MAX6921_VFD_Driver::sendData(uint32_t data1, uint32_t data2) {
     // Begin SPI transaction
     SPI.beginTransaction(SPISettings(DEFAULT_SPI_CLOCK_SPEED, MSBFIRST, SPI_MODE0));
     
-    // Set LOAD pins low
-    digitalWrite(_load1Pin, LOW);
-    digitalWrite(_load2Pin, LOW);
+    // Set LOAD pin low (common for all chips)
+    digitalWrite(_loadPin, LOW);
     
     // Send 20-bit data to each chip (3 bytes)
     // MAX6921 #1
@@ -86,9 +78,8 @@ void MAX6921_VFD_Driver::sendData(uint32_t data1, uint32_t data2) {
     SPI.transfer((data2 >> 8) & 0xFF);   // Middle 8 bits
     SPI.transfer(data2 & 0xFF);          // Lower 8 bits
     
-    // Set LOAD pins high to latch data
-    digitalWrite(_load1Pin, HIGH);
-    digitalWrite(_load2Pin, HIGH);
+    // Set LOAD pin high to latch data (common for all chips)
+    digitalWrite(_loadPin, HIGH);
     
     // End SPI transaction
     SPI.endTransaction();

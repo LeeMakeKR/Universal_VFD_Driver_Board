@@ -20,6 +20,8 @@ Based on max6921 VFD driver chip
 Arduino compatible interface
 - 범용적인 VFD 구동 솔루션
 Universal VFD driving solution
+- **다중 MAX6921 칩 지원 (공통 제어 핀 사용)**
+**Multiple MAX6921 chips support (shared control pins)**
 
 <details>
 <summary>1번 VFD (7BT317NK)</summary>

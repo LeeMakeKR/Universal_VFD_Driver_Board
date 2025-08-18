@@ -28,10 +28,8 @@
 #define MAX6921_VFD_DRIVER_VERSION "1.0.0"
 
 // Default pin assignments (can be overridden in constructor)
-#define DEFAULT_MAX6921_1_LOAD_PIN    10
-#define DEFAULT_MAX6921_1_BLANK_PIN   9
-#define DEFAULT_MAX6921_2_LOAD_PIN    8
-#define DEFAULT_MAX6921_2_BLANK_PIN   7
+#define DEFAULT_LOAD_PIN    10   // Common LOAD pin for all MAX6921 chips
+#define DEFAULT_BLANK_PIN   9    // Common BLANK pin for all MAX6921 chips
 
 // Display specifications for 7BT317NK
 #define VFD_NUM_GRIDS      7     // G0-G6
@@ -46,10 +44,8 @@
 class MAX6921_VFD_Driver {
 private:
     // Hardware pin assignments
-    uint8_t _load1Pin;     // LOAD pin for MAX6921 #1
-    uint8_t _blank1Pin;    // BLANK pin for MAX6921 #1
-    uint8_t _load2Pin;     // LOAD pin for MAX6921 #2
-    uint8_t _blank2Pin;    // BLANK pin for MAX6921 #2
+    uint8_t _loadPin;      // Common LOAD pin for all MAX6921 chips
+    uint8_t _blankPin;     // Common BLANK pin for all MAX6921 chips
     
     // Display data
     uint32_t _gridData[VFD_NUM_GRIDS];    // Segment data for each grid
@@ -68,10 +64,8 @@ private:
     
 public:
     // Constructor
-    MAX6921_VFD_Driver(uint8_t load1Pin = DEFAULT_MAX6921_1_LOAD_PIN,
-                       uint8_t blank1Pin = DEFAULT_MAX6921_1_BLANK_PIN,
-                       uint8_t load2Pin = DEFAULT_MAX6921_2_LOAD_PIN,
-                       uint8_t blank2Pin = DEFAULT_MAX6921_2_BLANK_PIN);
+    MAX6921_VFD_Driver(uint8_t loadPin = DEFAULT_LOAD_PIN,
+                       uint8_t blankPin = DEFAULT_BLANK_PIN);
     
     // Initialization
     bool begin();

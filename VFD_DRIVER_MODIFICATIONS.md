@@ -1,7 +1,8 @@
-# VFD 드라이버 폰트 분리 수정 사항
+# VFD 드라이버 폰트 분리 및 공통 핀 사용 수정 사항
 
 ## 수정 개요
-7BT317NK VFD의 연결 및 폰트 테이블을 참조하여 별도의 폰트 파일을 만들고, 메인 VFD 드라이버에서 해당 폰트 파일을 참조하도록 수정했습니다.
+1. 7BT317NK VFD의 연결 및 폰트 테이블을 참조하여 별도의 폰트 파일을 만들고, 메인 VFD 드라이버에서 해당 폰트 파일을 참조하도록 수정
+2. **다중 MAX6921 칩에서 LOAD와 BLANK 핀을 공통으로 사용하도록 변경**
 
 ## 생성된 파일
 
@@ -34,6 +35,28 @@
 - `#include "../VFD_7BT317NK_Font/VFD_7BT317NK_Font.h"` 추가
 - 기존 `FontPattern` 구조체 정의 제거
 - 기존 `VFD_FONT_TABLE` 선언 제거
+- **핀 정의 변경**: 개별 칩별 핀 → 공통 핀 사용
+  ```cpp
+  // 이전
+  #define DEFAULT_MAX6921_1_LOAD_PIN    10
+  #define DEFAULT_MAX6921_1_BLANK_PIN   9
+  #define DEFAULT_MAX6921_2_LOAD_PIN    8
+  #define DEFAULT_MAX6921_2_BLANK_PIN   7
+  
+  // 현재
+  #define DEFAULT_LOAD_PIN    10   // 공통 LOAD 핀
+  #define DEFAULT_BLANK_PIN   9    // 공통 BLANK 핀
+  ```
+- **생성자 매개변수 변경**: 4개 핀 → 2개 핀
+  ```cpp
+  // 이전
+  MAX6921_VFD_Driver(uint8_t load1Pin, uint8_t blank1Pin, 
+                     uint8_t load2Pin, uint8_t blank2Pin);
+  
+  // 현재
+  MAX6921_VFD_Driver(uint8_t loadPin = DEFAULT_LOAD_PIN,
+                     uint8_t blankPin = DEFAULT_BLANK_PIN);
+  ```
 
 ### 2. MAX6921_VFD_Driver.cpp
 **수정 사항:**
@@ -43,6 +66,22 @@
   uint32_t MAX6921_VFD_Driver::getCharacterPattern(char character) {
       return getVFDCharacterPattern(character);
   }
+  ```
+- **생성자 매개변수 변경**: 4개 핀 → 2개 핀
+- **핀 초기화 함수 간소화**: `initializePins()` 함수에서 4개 핀 설정 → 2개 핀 설정
+- **데이터 전송 함수 최적화**: `sendData()` 함수에서 개별 LOAD 핀 제어 → 공통 LOAD 핀 제어
+  ```cpp
+  // 이전
+  digitalWrite(_load1Pin, LOW);
+  digitalWrite(_load2Pin, LOW);
+  // ... SPI 전송 ...
+  digitalWrite(_load1Pin, HIGH);
+  digitalWrite(_load2Pin, HIGH);
+  
+  // 현재
+  digitalWrite(_loadPin, LOW);
+  // ... SPI 전송 ...
+  digitalWrite(_loadPin, HIGH);
   ```
 
 ### 3. MAX6921_VFD_Driver/README.md
