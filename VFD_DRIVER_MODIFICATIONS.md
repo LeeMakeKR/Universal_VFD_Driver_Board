@@ -109,6 +109,7 @@
 ### 세그먼트 매핑
 - P0-P20: 21개 세그먼트
 - 각 문자는 21비트 패턴으로 표현 (P0=LSB, P20=MSB)
+- MSB First 전송 방식: bit20 → bit19 → ... → bit1 → bit0
 - vfd-configs/7bt317nk/connection-table.md의 매핑을 정확히 반영
 
 ### 지원 문자

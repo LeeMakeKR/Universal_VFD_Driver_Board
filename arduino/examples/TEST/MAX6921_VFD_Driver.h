@@ -12,32 +12,6 @@
  * Pin Connections:
  * See example sketch for detailed pin mapping
  * 
- * ===== 데이지 체인 전송 방식 =====
- * 
- * 1. 하드웨어 연결:
- *    Arduino → MAX6921 #1 → MAX6921 #2 → VFD
- *    - DIN: Arduino → MAX6921 #1 DIN
- *    - DOUT: MAX6921 #1 DOUT → MAX6921 #2 DIN
- *    - CLK, LOAD, BLANK: 모든 칩에 공통 연결
- * 
- * 2. 데이터 전송 순서:
- *    - 첫 번째: MAX6921 #2 데이터 (체인의 끝에서부터)
- *    - 두 번째: MAX6921 #1 데이터
- *    - 총 40비트 전송 (각 칩당 20비트)
- * 
- * ===== MSB 전송 방식 =====
- * 
- * - MSB First (Most Significant Bit 먼저 전송)
- * - SPI 설정: MSBFIRST 모드 사용
- * - 비트 순서: 0, 1, 2, ..., 18, 19 (낮은 비트부터)
- * 
- * ===== BIT 방식 데이터 표현 =====
- * 
- * - 모든 데이터는 0b... 형식으로 표현
- * - 예: 0b11111111111111111111 (20비트 모두 HIGH)
- * - 예: 0b00000000000000000001 (비트 0만 HIGH)
- * - 가독성과 디버깅 편의성 향상
- * 
  * Author: Your Name
  * Date: August 2025
  * Version: 1.0
@@ -49,11 +23,28 @@
 #include <Arduino.h>
 #include <SPI.h>
 
+// Note: VFD-specific configurations (VFD_NUM_GRIDS, VFD_NUM_SEGMENTS, VFD_MAX_BRIGHTNESS) 
+// must be defined by including appropriate VFD config file BEFORE including this header
+
+// MAX6921 하드웨어 사양
+#define MAX6921_OUTPUT_BITS 20    // MAX6921 한 개당 출력 비트 수
+
+// VFD 설정을 기반으로 한 자동 계산 (VFD config 파일이 먼저 include되어야 함)
+#define VFD_TOTAL_BITS (VFD_NUM_GRIDS + VFD_NUM_SEGMENTS)  // 총 필요 비트
+#define VFD_REQUIRED_CHIPS ((VFD_TOTAL_BITS + MAX6921_OUTPUT_BITS - 1) / MAX6921_OUTPUT_BITS)  // 올림 계산
+#define VFD_TOTAL_OUTPUT_BITS (VFD_REQUIRED_CHIPS * MAX6921_OUTPUT_BITS)  // 총 출력 비트
+#define VFD_UNUSED_BITS (VFD_TOTAL_OUTPUT_BITS - VFD_TOTAL_BITS)  // 사용하지 않는 비트
+
+// 데이터 마스크 정의 (사용하지 않는 비트를 0으로 만들기 위해)
+#define VFD_CHIP1_VALID_MASK ((1UL << MAX6921_OUTPUT_BITS) - 1)  // 첫 번째 칩: 20비트 모두 사용
+#define VFD_CHIP2_VALID_BITS (VFD_TOTAL_BITS - MAX6921_OUTPUT_BITS)  // 두 번째 칩에서 사용할 비트 수
+#define VFD_CHIP2_VALID_MASK ((1UL << VFD_CHIP2_VALID_BITS) - 1)  // 두 번째 칩: 사용할 비트만 마스킹
+
+
 // Library version
 #define MAX6921_VFD_DRIVER_VERSION "1.0.0"
 
-// Note: Pin assignments and VFD specifications must be defined in main code
-// by including appropriate VFD config file before including this header
+// Note: Pin assignments must be defined in VFD config file
 
 // Timing constants
 #define DEFAULT_GRID_SCAN_DELAY_US  2000  // Microseconds per grid
@@ -65,9 +56,15 @@ private:
     uint8_t _loadPin;      // Common LOAD pin for all MAX6921 chips
     uint8_t _blankPin;     // Common BLANK pin for all MAX6921 chips
     
-    // Display data
-    uint32_t _gridData[VFD_NUM_GRIDS];    // Segment data for each grid
-    uint8_t _displayBuffer[VFD_NUM_DIGITS]; // Character buffer
+    // VFD configuration (set in constructor)
+    uint8_t _numGrids;     // Number of grids for this VFD
+    uint8_t _numSegments;  // Number of segments for this VFD
+    uint8_t _maxBrightness; // Maximum brightness for this VFD
+    
+    // Display data (using maximum possible values to avoid dependency)
+    // Each grid can have up to 64 segments (using 64-bit data type)
+    uint64_t _gridData[16];    // Segment data for each grid (max 16 grids, 64 segments each)
+    uint8_t _displayBuffer[16]; // Character buffer (max 16 characters)
     uint8_t _currentGrid;                 // Current active grid
     uint8_t _brightness;                  // Display brightness (0-255)
     
@@ -78,11 +75,17 @@ private:
     // Internal methods
     void initializePins();
     void sendData(uint32_t data1, uint32_t data2);
+    void sendDataWithMask(uint32_t data1, uint32_t data2);  // 자동 마스킹 포함
     uint32_t getCharacterPattern(char character);
     
+    // 자동 마스킹 함수들
+    uint32_t applyChip1Mask(uint32_t data);
+    uint32_t applyChip2Mask(uint32_t data);
+    
 public:
-    // Constructor - pin assignments must be provided by main code
-    MAX6921_VFD_Driver(uint8_t loadPin, uint8_t blankPin);
+    // Constructor - pin assignments and VFD configuration must be provided
+    MAX6921_VFD_Driver(uint8_t loadPin, uint8_t blankPin, 
+                       uint8_t numGrids, uint8_t numSegments, uint8_t maxBrightness);
     
     // Initialization
     bool begin();
@@ -111,7 +114,8 @@ public:
     
     // Raw segment control
     void setSegment(uint8_t grid, uint8_t segment, bool state);
-    void setGrid(uint8_t grid, uint32_t segmentMask);
+    void setGrid(uint8_t grid, uint64_t segmentMask);
+    void sendDataDirect(uint32_t data1, uint32_t data2);  // 직접 데이터 전송
     
     // Test and diagnostic functions
     void displayTest();
@@ -129,6 +133,12 @@ public:
     
     // Utility functions
     bool isValidPosition(uint8_t position);
+    
+    // VFD 설정 정보 함수들 (디버깅용)
+    uint8_t getTotalBits();
+    uint8_t getRequiredChips(); 
+    uint8_t getUnusedBits();
+    void printVFDInfo();  // 시리얼로 VFD 설정 정보 출력
     const char* getVersion();
 };
 

@@ -108,6 +108,7 @@ const VFD_FontChar VFD_7BT317NK_FONT_TABLE[] = {
 const uint8_t VFD_7BT317NK_FONT_SIZE = sizeof(VFD_7BT317NK_FONT_TABLE) / sizeof(VFD_FontChar);
 
 // Helper function to find character pattern
+// Font functions
 uint32_t getCharacterPattern(char ch);
 
 // Helper function to check if character is supported

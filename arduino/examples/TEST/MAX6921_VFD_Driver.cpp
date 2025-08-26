@@ -3,41 +3,24 @@
  * 
  * Implementation file for MAX6921 VFD Driver library
  * 
- * ===== 구현 방식 개요 =====
- *
- * 1. 데이지 체인 지원:
- *    - 2개의 MAX6921 칩을 연쇄 연결
- *    - 총 40비트 데이터 전송 (각 칩당 20비트)
- *    - 마지막 칩부터 먼저 데이터 전송
- *
- * 2. MSB First 전송:
- *    - 최상위 비트(MSB)부터 먼저 전송
- *    - SPI MSBFIRST 모드 사용
- *    - 하드웨어 호환성 향상
- *
- * 3. BIT 기반 데이터 표현:
- *    - 모든 비트 마스크를 0b... 형식으로 표현
- *    - 디버깅과 가독성 향상
- *    - 비트 패턴 직관적 확인 가능
- *
- * 4. 7BT317NK VFD 전용 최적화:
- *    - 7개 그리드 (G0-G6)
- *    - 21개 세그먼트 (P0-P20)
- *    - 하드웨어 매핑 최적화
- *
  * Author: Your Name
  * Date: August 2025
  * Version: 1.0
  */
 
+#include "MAX6921_VFD_Driver.h"
 
 // Constructor
-MAX6921_VFD_Driver::MAX6921_VFD_Driver(uint8_t loadPin, uint8_t blankPin) {
+MAX6921_VFD_Driver::MAX6921_VFD_Driver(uint8_t loadPin, uint8_t blankPin, 
+                                       uint8_t numGrids, uint8_t numSegments, uint8_t maxBrightness) {
     _loadPin = loadPin;
     _blankPin = blankPin;
+    _numGrids = numGrids;
+    _numSegments = numSegments;
+    _maxBrightness = maxBrightness;
     
     _currentGrid = 0;
-    _brightness = VFD_MAX_BRIGHTNESS;
+    _brightness = maxBrightness;
     _gridScanDelay = DEFAULT_GRID_SCAN_DELAY_US;
     _lastGridScan = 0;
     
@@ -77,64 +60,50 @@ void MAX6921_VFD_Driver::initializePins() {
     
     // Set initial states
     digitalWrite(_loadPin, HIGH);     // LOAD inactive (active low)
-    digitalWrite(_blankPin, HIGH);    // Display enabled (active low)
+    digitalWrite(_blankPin, LOW);     // Display enabled (BLANK is active high, so LOW = display on)
 }
 
 // Send data to MAX6921 chips
-// 
-// ===== 데이지 체인 전송 방식 상세 설명 =====
-//
-// 1. 하드웨어 구성:
-//    Arduino → [MAX6921 #1] → [MAX6921 #2] → VFD Display
-//    - DIN 체인: Arduino DIN → #1 DIN, #1 DOUT → #2 DIN
-//    - 공통 신호: CLK, LOAD, BLANK (모든 칩 동시 제어)
-//
-// 2. 데이터 전송 순서 (40비트 총):
-//    순서 1: MAX6921 #2 데이터 (20비트) - 체인의 끝에서부터
-//    순서 2: MAX6921 #1 데이터 (20비트) - 체인의 시작
-//    이유: 데이지 체인에서는 마지막 칩 데이터를 먼저 전송해야 함
-//
-// 3. MSB First 전송:
-//    - SPI 설정: MSBFIRST 모드
-//    - 각 바이트 내에서 비트 7부터 비트 0까지 순차 전송
-//    - 비트 순서: MSB(7) → 6 → 5 → ... → 1 → LSB(0)
-//
-// 4. BIT 방식 마스킹:
-//    - 0b00001111: 4비트 상위 마스크 (비트 16-19)
-//    - 0b11111111: 8비트 전체 마스크 (비트 0-7, 8-15)
-//    - 가독성과 디버깅 편의성을 위해 HEX 대신 BIT 사용
-//
 void MAX6921_VFD_Driver::sendData(uint32_t data1, uint32_t data2) {
-    // MSB First SPI 트랜잭션 시작
+    sendDataWithMask(data1, data2);
+}
+
+// 자동 마스킹을 적용하여 데이터 전송
+void MAX6921_VFD_Driver::sendDataWithMask(uint32_t data1, uint32_t data2) {
+    // 사용하지 않는 비트를 0으로 마스킹
+    uint32_t maskedData1 = applyChip1Mask(data1);
+    uint32_t maskedData2 = applyChip2Mask(data2);
+    
+    // Begin SPI transaction
     SPI.beginTransaction(SPISettings(DEFAULT_SPI_CLOCK_SPEED, MSBFIRST, SPI_MODE0));
     
-    // LOAD 핀을 LOW로 설정 (데이터 전송 시작, 모든 칩 공통)
+    // Set LOAD pin low (common for all chips)
     digitalWrite(_loadPin, LOW);
     
-    // 데이지 체인 전송: 마지막 칩(#2)부터 먼저 전송
-    // MAX6921 #2 데이터 전송 (20비트를 3바이트로 분할)
-    SPI.transfer((data2 >> 16) & 0b00001111);  // 상위 4비트 (비트 16-19)
-    SPI.transfer((data2 >> 8) & 0b11111111);   // 중간 8비트 (비트 8-15)
-    SPI.transfer(data2 & 0b11111111);          // 하위 8비트 (비트 0-7)
+    // Send 20-bit data to each chip (3 bytes)
+    // MAX6921 #1
+    SPI.transfer((maskedData1 >> 16) & 0x0F);  // Upper 4 bits
+    SPI.transfer((maskedData1 >> 8) & 0xFF);   // Middle 8 bits
+    SPI.transfer(maskedData1 & 0xFF);          // Lower 8 bits
     
-    // MAX6921 #1 데이터 전송 (20비트를 3바이트로 분할)
-    SPI.transfer((data1 >> 16) & 0b00001111);  // 상위 4비트 (비트 16-19)
-    SPI.transfer((data1 >> 8) & 0b11111111);   // 중간 8비트 (비트 8-15)
-    SPI.transfer(data1 & 0b11111111);          // 하위 8비트 (비트 0-7)
+    // MAX6921 #2
+    SPI.transfer((maskedData2 >> 16) & 0x0F);  // Upper 4 bits
+    SPI.transfer((maskedData2 >> 8) & 0xFF);   // Middle 8 bits
+    SPI.transfer(maskedData2 & 0xFF);          // Lower 8 bits
     
-    // LOAD 핀을 HIGH로 설정하여 데이터 래치 (모든 칩 동시 출력 업데이트)
+    // Set LOAD pin high to latch data (common for all chips)
     digitalWrite(_loadPin, HIGH);
     
-    // SPI 트랜잭션 종료
+    // End SPI transaction
     SPI.endTransaction();
 }
 
 // Clear display
 void MAX6921_VFD_Driver::clear() {
-    for (int i = 0; i < VFD_NUM_GRIDS; i++) {
+    for (int i = 0; i < _numGrids; i++) {
         _gridData[i] = 0;
     }
-    for (int i = 0; i < VFD_NUM_DIGITS; i++) {
+    for (int i = 0; i < _numGrids; i++) {
         _displayBuffer[i] = ' ';
     }
 }
@@ -149,15 +118,13 @@ void MAX6921_VFD_Driver::refresh() {
         
         // Calculate data for current grid
         uint32_t gridPattern = (1UL << _currentGrid);
-        uint32_t segmentData = _gridData[_currentGrid];
+        uint64_t segmentData = _gridData[_currentGrid];
         
-        // Split data between two MAX6921 chips
-        uint32_t segments1 = segmentData & 0b1111111111111;        // P0-P12 (13 bits)
-        uint32_t segments2 = (segmentData >> 13) & 0b11111111;     // P13-P20 (8 bits)
-        
-        // Combine grid and segment data
-        uint32_t data1 = gridPattern | (segments1 << 7);  // Grid + segments
-        uint32_t data2 = segments2;                        // Segments only
+        // Generic data transmission - specific bit mapping should be handled 
+        // by VFD config or external mapping functions
+        // For now, send raw data (this needs to be customized per VFD)
+        uint32_t data1 = gridPattern | (uint32_t)(segmentData & 0xFFFFF);  // Grid + lower 20 bits
+        uint32_t data2 = (uint32_t)((segmentData >> 20) & 0xFFFFF);       // Upper bits
         
         // Send to MAX6921 chips
         sendData(data1, data2);
@@ -180,7 +147,8 @@ uint8_t MAX6921_VFD_Driver::getBrightness() {
 
 // Get character pattern from font table
 uint32_t MAX6921_VFD_Driver::getCharacterPattern(char character) {
-    return getVFDCharacterPattern(character);
+    // BlinkTest에서는 문자 표시를 사용하지 않으므로 더미 반환
+    return 0x000000;
 }
 
 // Display character at position
@@ -199,7 +167,7 @@ void MAX6921_VFD_Driver::displayString(const char* text) {
     clear();
     
     int len = strlen(text);
-    if (len > VFD_NUM_DIGITS) len = VFD_NUM_DIGITS;
+    if (len > VFD_NUM_GRIDS) len = VFD_NUM_GRIDS;
     
     for (int i = 0; i < len; i++) {
         displayCharacter(i, text[i]);
@@ -212,13 +180,13 @@ void MAX6921_VFD_Driver::displayString(String text) {
 
 // Display number
 void MAX6921_VFD_Driver::displayNumber(int number) {
-    char buffer[VFD_NUM_DIGITS + 1];
+    char buffer[VFD_NUM_GRIDS + 1];
     snprintf(buffer, sizeof(buffer), "%4d", number);
     displayString(buffer);
 }
 
 void MAX6921_VFD_Driver::displayNumber(long number) {
-    char buffer[VFD_NUM_DIGITS + 1];
+    char buffer[VFD_NUM_GRIDS + 1];
     snprintf(buffer, sizeof(buffer), "%4ld", number);
     displayString(buffer);
 }
@@ -235,7 +203,7 @@ void MAX6921_VFD_Driver::displayTest() {
     // TODO: Implement comprehensive test
     // Turn on all segments briefly
     for (int i = 0; i < VFD_NUM_GRIDS; i++) {
-        _gridData[i] = 0b111111111111111111111; // All segments on (21 bits)
+        _gridData[i] = 0x1FFFFF; // All segments on
     }
     delay(1000);
     clear();
@@ -243,7 +211,7 @@ void MAX6921_VFD_Driver::displayTest() {
 
 // Utility functions
 bool MAX6921_VFD_Driver::isValidPosition(uint8_t position) {
-    return position < VFD_NUM_DIGITS;
+    return position < VFD_NUM_GRIDS;
 }
 
 const char* MAX6921_VFD_Driver::getVersion() {
@@ -259,14 +227,78 @@ uint16_t MAX6921_VFD_Driver::getGridScanDelay() {
     return _gridScanDelay;
 }
 
+// Set segment data for specific grid
+void MAX6921_VFD_Driver::setGrid(uint8_t grid, uint64_t segmentMask) {
+    if (grid < _numGrids) {
+        _gridData[grid] = segmentMask;
+    }
+}
+
+// Set individual segment state
+void MAX6921_VFD_Driver::setSegment(uint8_t grid, uint8_t segment, bool state) {
+    if (grid < _numGrids && segment < _numSegments) {
+        if (state) {
+            _gridData[grid] |= (1ULL << segment);  // ULL for 64-bit
+        } else {
+            _gridData[grid] &= ~(1ULL << segment); // ULL for 64-bit
+        }
+    }
+}
+
 // TODO: Implement remaining methods
 // - setDecimalPoint()
 // - setColon()
 // - displayTime()
-// - setSegment()
-// - setGrid()
 // - segmentTest()
 // - gridTest()
 // - scrollText()
 // - fadeIn()
 // - fadeOut()
+
+// 직접 데이터 전송 함수 (공개 인터페이스)
+void MAX6921_VFD_Driver::sendDataDirect(uint32_t data1, uint32_t data2) {
+    sendData(data1, data2);
+}
+
+// 마스킹 함수들
+uint32_t MAX6921_VFD_Driver::applyChip1Mask(uint32_t data) {
+    return data & VFD_CHIP1_VALID_MASK;  // 첫 번째 칩: 20비트 모두 사용
+}
+
+uint32_t MAX6921_VFD_Driver::applyChip2Mask(uint32_t data) {
+    return data & VFD_CHIP2_VALID_MASK;  // 두 번째 칩: 사용할 비트만 마스킹
+}
+
+// VFD 설정 정보 함수들 (디버깅용)
+uint8_t MAX6921_VFD_Driver::getTotalBits() {
+    return VFD_TOTAL_BITS;
+}
+
+uint8_t MAX6921_VFD_Driver::getRequiredChips() {
+    return VFD_REQUIRED_CHIPS;
+}
+
+uint8_t MAX6921_VFD_Driver::getUnusedBits() {
+    return VFD_UNUSED_BITS;
+}
+
+void MAX6921_VFD_Driver::printVFDInfo() {
+    Serial.println("=== VFD 설정 정보 ===");
+    Serial.print("VFD 그리드 수: ");
+    Serial.println(VFD_NUM_GRIDS);
+    Serial.print("VFD 세그먼트 수: ");
+    Serial.println(VFD_NUM_SEGMENTS);
+    Serial.print("총 필요 비트: ");
+    Serial.println(VFD_TOTAL_BITS);
+    Serial.print("필요한 MAX6921 칩 수: ");
+    Serial.println(VFD_REQUIRED_CHIPS);
+    Serial.print("총 출력 비트: ");
+    Serial.println(VFD_TOTAL_OUTPUT_BITS);
+    Serial.print("사용하지 않는 비트: ");
+    Serial.println(VFD_UNUSED_BITS);
+    Serial.print("첫 번째 칩 마스크: 0x");
+    Serial.println(VFD_CHIP1_VALID_MASK, HEX);
+    Serial.print("두 번째 칩 마스크: 0x");
+    Serial.println(VFD_CHIP2_VALID_MASK, HEX);
+    Serial.println("=====================");
+}
